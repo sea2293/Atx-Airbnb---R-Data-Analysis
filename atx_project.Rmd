@@ -1,0 +1,904 @@
+---
+#atx airbnb project code
+---
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+
+```{r}
+#install packages
+
+install.packages("ggridges")
+install.packages("cowplot")
+install.packages("glue")
+install.packages("ggmap")
+install.packages("gridExtra")
+install.packages("hrbrthemes")
+install.packages("ggthemes")
+install.packages("DescTools")
+import_roboto_condensed()
+
+```
+
+
+```{r}
+#load packages
+
+# visualisation
+library(RColorBrewer)
+library(ggridges)
+library(cowplot)
+library(ggplot2)
+library(ggmap)
+library(gridExtra)
+
+
+#data manipulation
+library(dplyr)
+library(glue)
+
+#specific visualisation
+library(hrbrthemes)
+library(ggthemes)
+
+#statistics
+library(DescTools)
+```
+
+
+```{r}
+#loading the dataset
+atx_ab = read.csv("~/atx_listings1.csv")
+atx_ab = select(atx_ab, neighbourhood_group, neighbourhood, latitude, longitude, room_type, price, minimum_nights, number_of_reviews, reviews_per_month)
+#viewing the first DataFrame records
+head(atx_ab, 6)
+```
+
+
+```{r}
+#generating a summary of all data attributes with the summary() function
+# can compare mean and median : are they close? how do they differ?
+
+summary(atx_ab)
+```
+
+
+```{r}
+
+# how does the mode compare to the mean and median?
+
+mode_table = function(x){
+    
+    freq = table(x)
+    return(names(freq)[freq == max(freq)])
+}
+
+mode_ = data.frame(Mode = c(mode_table(atx_ab$price), mode_table(atx_ab$minimum_nights)))
+row.names(mode_) = c("Price", "Minimum nights")
+mode_
+
+# dispersion
+
+#absolute deviation
+mean_dev = data.frame(DM = c(MeanAD(atx_ab$price), MeanAD(atx_ab$minimum_nights)))
+row.names(mean_dev) = c("Price", "Minimum nights")
+mean_dev
+
+#variance
+var_ = data.frame("Variance" = c(var(atx_ab$price), var(atx_ab$minimum_nights)))
+row.names(var_) = c("Price", "Minimum nights")
+var_
+
+#standard deviation
+s_dev = data.frame("Standard deviation" = c(sqrt(var(atx_ab$price)), sqrt(var(atx_ab$minimum_nights))))
+row.names(s_dev) = c("Price", "Minimum nights")
+s_dev
+```
+
+
+```{r}
+#data visualization
+
+#mapping all listings
+
+# plot a ggmap basemap
+us = c(left = -125, bottom = 25.75, right = -67, top = 49)
+map = get_stamenmap(us, zoom = 5, maptype = "toner-lite",legend="none")
+plot(map)
+
+#where are the listings located?
+scatterplot_atx = qmplot(x=longitude, y=latitude, data= atx_ab,legend="none",color=I("red"))
+plot(scatterplot_atx)
+
+#denisty of listing locations?
+densityplot_atx = qmplot(x=longitude, y=latitude, 
+                             data = atx_ab,
+                             geom = "blank",
+                             maptype = "toner-background", 
+                             darken = .3, 
+                             legend = "topright") + stat_density_2d(aes(fill = ..level..), 
+                  geom = "polygon", 
+                  alpha = 3.0,
+                  color = NA) + scale_fill_gradient2(low = "blue", 
+                       mid = "green", 
+                       high = "red")
+plot(densityplot_atx)
+```
+
+
+```{r}
+#descriptive analysis: purpose is to summarize and explore the dataset. The data collected from InsideAirbnb includes a combination of qualitative and quantitative variables: neighbourhood_group, neighbourhood, latitude, longitude, room_type, price, minimum_nights, number_of_reviews, reviews_per_month. the downloaded csv is part of the most recent dataset from (date).
+#neighbourhood_group: using the provided zipcodes and a regional map of central texas (source), (amount) neighbourhood groups were added to further explore the data.
+#latitude & longitude: coordinates were provided for the listing locations which could be used for mapping the data.
+#room_type: provided information on the listing type, which include (amount) options: shared room, private room, entire home/apt, hotel room.
+#price: provided listing price information
+#minimum_nights: included the minimum number of nights required per stay for each listing
+#number_of_reviews: at the time of the download, totaled the current number of reviews for each listing
+#reviews_per_month: averaged the total number of reviews by month
+
+
+#nominal Qualitative Variables
+c(unique(atx_ab["neighbourhood_group"]))
+
+c(unique(atx_ab["neighbourhood"]))
+
+
+c(unique(atx_ab["room_type"]))
+
+
+#discrete Quantitative Variables
+
+c(unique(atx_ab["minimum_nights"]))
+
+glue("Price Minimum: {min(atx_ab$price)} | Price Maximum: {max(atx_ab$price)}")
+
+#continuous Quantitative
+glue("Minimum Longitude : {min(atx_ab$longitude)} | Maximum Longitude: {max(atx_ab$longitude)}")
+
+glue("Minimum Latitude : {min(atx_ab$latitude)} | Maximum Latitude: {max(atx_ab$latitude)}")
+```
+
+
+```{r}
+#percentiles
+
+percentages = c()
+for(i in 1:99){
+    
+    percentages = c(percentages, i / 100)
+    
+}
+
+percentile = data.frame(Price = quantile(atx_ab$price, percentages), minimum_nights = quantile(atx_ab$minimum_nights, percentages))
+percentile
+
+#what can this tell us about listings? how can hosts use this information
+
+#25% of the bookings are equal to or less than 107.0 USD and 1 night minimum
+
+#50% of the bookings are equal to or less than 175.0 USD and 2 night minimum
+
+#75% of the bookings are equal to or less than 298.0 USD and 3 night minimum
+
+#99% of the bookings are equal to or less than 2071.4 USD and 90 night minimum
+
+```
+
+
+```{r}
+#which places are most reviewed?
+top_50_rev = tail(arrange(atx_ab, atx_ab$number_of_reviews), 50)
+top_50_rev
+
+#how does price impact number of reviews?
+arrange(top_50_rev,top_50_rev$price)
+
+```
+
+
+```{r}
+#frequency tables for qualitative variables
+
+#frequency tables in order to understand how the data are distributed. the percentages will help conclude if the distributions are even or not and what the most popular groupings are for qualitative variables.
+
+#what is the most popular neighbourhood_group?
+area_frequency = data.frame(cbind(Frequency = table(atx_ab$neighbourhood_group), Percent = prop.table(table(atx_ab$neighbourhood_group)) * 100))
+area_frequency = area_frequency[order(area_frequency$Frequency),]
+area_frequency
+
+#most popular zip?
+zip_frequency = data.frame(cbind(Frequency = table(atx_ab$neighbourhood), Percent = prop.table(table(atx_ab$neighbourhood)) * 100))
+zip_frequency = zip_frequency[order(zip_frequency$Frequency),]
+zip_frequency
+
+#most popular listing type?
+type_frequency = data.frame(cbind(Frequency = table(atx_ab$room_type), Percent = prop.table(table(atx_ab$room_type)) * 100))
+type_frequency = type_frequency[order(type_frequency$Frequency),]
+type_frequency
+
+#most frequent length of stay?
+night_frequency = data.frame(cbind(Frequency = table(atx_ab$minimum_nights), Percent = prop.table(table(atx_ab$minimum_nights)) * 100))
+night_frequency = night_frequency[order(night_frequency$Frequency),]
+night_frequency
+tail(night_frequency, 10)
+
+#most frequent cost?
+price_frequency = data.frame(cbind(Frequency = table(atx_ab$price), Percent = prop.table(table(atx_ab$price)) * 100))
+price_frequency = price_frequency[order(price_frequency$Frequency),]
+price_frequency
+tail(price_frequency, 10)
+
+# this % is below this price point***
+```
+
+
+```{r}
+#frequency data visualization
+
+#because there are (amount) unique categories, lets look at the 10 most occurring***
+
+# of all (amount) (variable type) the most requested for accomodations reservations are...
+
+#neighbourhood_group frequency top 10 only
+plot_theme = theme(plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 8, angle=15, face = "bold"),
+              axis.text.y = element_text(size = 8, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 15),
+              axis.title.y = element_text(size = 15),
+              legend.text = element_text(size = 13, face = "bold"))
+
+df = data.frame(neighbourhood_group = row.names(tail(area_frequency, 10)), Frequency = tail(area_frequency, 10)$Frequency)
+
+options(repr.plot.width=15, repr.plot.height=6)
+a = ggplot(data = df, mapping = aes(x = reorder(neighbourhood_group, Frequency), y = Frequency)) +
+    theme_minimal() + 
+    geom_point(size = 6, color = "green") +
+    ggtitle("10 Most Frequent Areas") +
+    xlab("") +
+    geom_line(color = "black", size = 1, linetype= 100, group = 1, alpha = .5) + 
+    geom_bar(stat = "identity", mapping = aes(fill = neighbourhood_group, color = neighbourhood_group), alpha = .8, size = 1.5) +   
+    plot_theme
+
+a
+```
+
+
+```{r}
+#zipcode frequency top 10 only
+plot_theme = theme(plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 12, angle=15, face = "bold"),
+              axis.text.y = element_text(size = 12, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 15),
+              axis.title.y = element_text(size = 15),
+              legend.text = element_text(size = 13, face = "bold"))
+
+df = data.frame(neighbourhood = row.names(tail(zip_frequency, 10)), Frequency = tail(zip_frequency, 10)$Frequency)
+
+options(repr.plot.width=15, repr.plot.height=6)
+a = ggplot(data = df, mapping = aes(x = reorder(neighbourhood, Frequency), y = Frequency)) +
+    theme_minimal() + 
+    geom_point(size = 6, color = "green") +
+    ggtitle("10 Most Frequent Zip Codes") +
+    xlab("") +
+    geom_line(color = "black", size = 1, linetype= 100, group = 1, alpha = .5) + 
+    geom_bar(stat = "identity", mapping = aes(fill = neighbourhood, color = neighbourhood), alpha = .8, size = 1.5) +   
+    plot_theme
+    
+a  
+```
+
+
+```{r}
+#room type frequency
+plot_theme = theme(plot.background = element_rect(fill = "#EEE8AA", color = "yellow"),
+              plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, face = "bold"),
+              axis.text.y = element_text(size = 19, face = "bold"),
+              axis.title.x = element_text(size = 19),
+              axis.title.y = element_text(size = 19),
+              legend.position = "none")
+
+
+options(repr.plot.width=15, repr.plot.height=6)
+
+a = ggplot(data = type_frequency, mapping = aes(x = Frequency, y = reorder(row.names(type_frequency), Frequency))) + 
+         geom_bar(stat = "identity", mapping = aes(fill = row.names(type_frequency), color = row.names(type_frequency)), alpha = .7, size = 1.1) +
+         geom_label(mapping = aes(label=Frequency), fill = "#006400", size = 6, color = "white", fontface = "bold", hjust=.7) +
+         ylab("") +
+         ggtitle("Room Type Distribution") +
+         theme_economist() +
+         plot_theme
+
+a
+```
+
+
+```{r}
+
+#price frequency
+plot_theme = theme(plot.background = element_rect(fill = "#FFFAFA", color = "#FFFAFA"),
+              plot.title = element_text(size = 15, hjust = .5),
+              axis.text.x = element_text(size = 9, face = "bold"),
+              axis.text.y = element_text(size = 9, face = "bold"),
+              axis.title.x = element_text(size = 11),
+              axis.title.y = element_text(size = 11),
+              legend.position = "none")
+
+options(repr.plot.width=14, repr.plot.height=6)
+a = ggplot(data = atx_ab, mapping = aes(x = price)) +
+         geom_histogram(fill = "cyan", bins = 70, size = 1.0, color = "black") +
+         theme_minimal() +
+         ylab("Frequency") +
+         xlab("Price in USD") +
+         ggtitle("Frequency of Price") +
+         plot_theme
+
+
+df = data.frame(price = atx_ab["price"][atx_ab["price"] <= 2000])
+b = ggplot(data = df, mapping = aes(x = price)) +
+         geom_histogram(fill = "cyan", bins = 70, size = 1.0, color = "black") +
+         theme_minimal() +
+         ylab("Frequency") +
+         xlab("Price in USD") +
+         ggtitle("Airbnb Price less than 2000 ") +
+         plot_theme
+
+plot_grid(a, b, ncol=2, nrow=1)
+```
+
+
+```{r}
+#room_type - price frequency
+
+# as expected, shared rooms have a higher frequency of low prices
+#entire homes/ apartments have the largest range of prices followed by private rooms
+# shared rooms and private rooms have the highest density of listings under $125
+plot_theme = theme(
+              plot.title = element_text(size = 15, hjust = .5),
+              axis.text.x = element_text(size = 10),
+              axis.text.y = element_text(size = 10),
+              axis.title.x = element_text(size = 12),
+              axis.title.y = element_text(size = 12),
+              legend.position = "right")
+
+plot_theme1 = theme(
+              plot.title = element_text(size = 15, hjust = .5),
+              axis.text.x = element_text(size = 10, face = "bold"),
+              axis.text.y = element_text(size = 10, face = "bold"),
+              axis.title.x = element_text(size = 12),
+              axis.title.y = element_text(size = 12),
+              legend.position = "right")
+
+options(repr.plot.width=18, repr.plot.height=6)
+a = ggplot(data = atx_ab, mapping = aes(x = price)) +
+         geom_histogram(mapping = aes(fill = room_type), bins = 70, size = 0.9) +
+         theme_minimal() +
+         ylab("Frequency") +
+         xlab("Price") +
+         ggtitle("Frequency of Price USD") +
+         plot_theme
+
+
+df = data.frame(price = atx_ab["price"][atx_ab["price"] <= 1000], room_type = atx_ab["room_type"][atx_ab["price"] <= 1000])
+b = ggplot(data = df, mapping = aes(x = price)) +
+         geom_histogram(mapping = aes(fill = room_type), bins = 70, size = 0.9) +
+         theme_minimal() +
+         ylab("") +
+         xlab("Price") +
+         ggtitle("Frequency of Price less than 1000 USD") +
+         plot_theme
+
+#density visualization
+c = ggplot(data = df, mapping = aes(x = price, fill = room_type)) +
+         geom_density(mapping = aes(fill = room_type), bins = 70, size = 0.9, color = "black", alpha = .6, size = 1.0) +
+         theme_minimal() +
+         ylab("Density") +
+         xlab("Price") +
+         ggtitle("Density Plot of Price less than 1000 USD") +
+         plot_theme1 +
+         theme(legend.position="bottom", legend.text = element_text(colour="black", size=12, 
+                                     face="bold"))
+         
+         
+a
+b
+c
+```
+
+
+```{r}
+#min night frequency
+
+a = ggplot(data = atx_ab, mapping = aes(x = minimum_nights)) +
+         geom_histogram(fill = "orange", bins = 70, size = 1.0, color = "black") +
+         theme_minimal() +
+         ylab("Frequency") +
+         xlab("Minimum Nights") +
+         ggtitle("Frequency of Minimum Nights") +
+         plot_theme
+
+
+df = data.frame(minimum_nights = atx_ab["minimum_nights"][atx_ab["minimum_nights"] <= 70])
+b = ggplot(data = df, mapping = aes(x = minimum_nights)) +
+         geom_histogram(fill = "orange", bins = 70, size = 1.0, color = "black") +
+         theme_minimal() +
+         ylab("Frequency") +
+         xlab("Minimum Nights") +
+         ggtitle("Nights less than 70") +
+         plot_theme
+
+plot_grid(a, b, ncol=2, nrow=1)
+
+
+#top 10 only
+plot_theme1 = theme(plot.title = element_text(size = 18, hjust = .5),
+              axis.text.x = element_text(size = 12, angle=15, face = "bold"),
+              axis.text.y = element_text(size = 12, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 15),
+              axis.title.y = element_text(size = 15),
+              legend.text = element_text(size = 13, face = "bold"))
+
+df = data.frame(minimum_nights = row.names(tail(night_frequency, 10)), Frequency = tail(night_frequency, 10)$Frequency)
+
+options(repr.plot.width=15, repr.plot.height=6)
+ggplot(data = df, mapping = aes(x = reorder(minimum_nights, Frequency), y = Frequency)) +
+    theme_minimal() + 
+    geom_point(size = 6, color = "green") +
+    ggtitle("10 Most Frequent Minimum Nights") +
+    xlab("") +
+    geom_line(color = "black", size = 1, linetype= 100, group = 1, alpha = .5) + 
+    geom_bar(stat = "identity", mapping = aes(fill = minimum_nights, color = minimum_nights), alpha = .8, size = 1.5) +   
+    plot_theme1
+
+```
+
+
+```{r}
+#density visualization
+
+
+#Can determine if the data show a normal distribution by looking at measures of central tendency (mean, median, mode).
+#both graphs appear to be positively skewed and asymmetrical. The second graph shows the majority of listings have a minimum nights requirement under 10 nights, but there is an uptick again at 30 which indicates longer term listings.
+# the mean in both distributions appears to be affected by outliers.
+plot_theme = theme(
+              plot.title = element_text(size = 17, hjust = .5),
+              axis.text.x = element_text(size = 11, face = "bold"),
+              axis.text.y = element_text(size = 11, face = "bold"),
+              axis.title.x = element_text(size = 15),
+              axis.title.y = element_text(size = 15),
+              legend.text = element_text(size = 11, face = "bold"))
+
+options(repr.plot.width=25, repr.plot.height=10)
+options(warn=-1)
+df = data.frame(price = atx_ab["price"][atx_ab["price"] <= 750])
+a = ggplot(data = df, mapping = aes(x = price)) +
+         geom_density(fill = "cyan", size = 0.9, color = "black") +
+         geom_vline(xintercept = mean(atx_ab$price), size = 0.8, linetype="dashed", color = "green") +
+         geom_vline(xintercept = median(atx_ab$price), size = 0.8, linetype="dashed", color = "red") +
+         geom_vline(xintercept = as.numeric(mode_table(atx_ab$price)), size = 0.8, linetype="dashed", color = "blue") +
+         annotate("text", label="Mean = 294.3", x = 270, y = .0085, color = "green", size=4, fontface = "bold") +
+         annotate("text", label="Median = 175", x = 300, y = .0075, color = "red", size=4, fontface = "bold") +
+         annotate("text", label="Mode = 150", x = 330, y = .0065, color = "blue", size=4, fontface = "bold") +
+         theme_ipsum() +
+         ylab("") +
+         xlab("Price") +
+         ggtitle("Density of Price less than 750") +
+         plot_theme
+        
+df = data.frame(minimum_nights = atx_ab["minimum_nights"][atx_ab["minimum_nights"] <= 32])
+b = ggplot(data = df, mapping = aes(x = minimum_nights)) +
+         geom_density(fill = "yellow", size = 0.9, color = "black") +
+         geom_vline(xintercept = mean(atx_ab$minimum_nights), size = 0.8, linetype="dashed", color = "green") +
+         geom_vline(xintercept = median(atx_ab$minimum_nights), size = 0.8, linetype="solid", color = "red") +
+         geom_vline(xintercept = as.numeric(mode_table(atx_ab$minimum_nights)), size = 0.8, linetype="dashed", color = "blue") +
+         annotate("text", label="Mean = 7.61", x = 12, y = .33, color = "green", size=4, fontface = "bold") +
+         annotate("text", label="Median = 2", x = 13.5, y = .28, color = "red", size=4, fontface = "bold") +
+         annotate("text", label="Mode = 2", x = 15, y = .23, color = "blue", size=4, fontface = "bold") +
+         theme_ipsum() +
+         ylab("") +
+         xlab("Minimum nights") +
+         ggtitle("Density of Minimum Nights less than 32") +
+         plot_theme
+
+a
+b
+
+
+```
+
+
+```{r}
+#violin plot visualization
+
+plot_theme = theme(
+              plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, face = "bold"),
+              axis.text.y = element_text(size = 19, face = "bold"),
+              axis.title.x = element_text(size = 19),
+              axis.title.y = element_text(size = 19),
+              legend.text = element_text(size = 14, face = "bold"))
+
+options(repr.plot.width = 14, repr.plot.height=10)
+a = ggplot(data = atx_ab, aes(y="", x = price)) +
+            geom_violin(size=1.1, color = "black", fill = "cyan", alpha = .7) +
+            geom_vline(xintercept=median(atx_ab$price), size =1.5, color = "black") +
+            theme_minimal() +
+            coord_flip() +
+            ggtitle("Price") +
+            ylab("") +
+            xlab("") +
+            plot_theme
+
+b = ggplot(data = atx_ab, mapping = aes(y = "", x = minimum_nights)) +
+            geom_violin(size=1.1, color = "black", fill = "yellow", alpha = .7) +
+            geom_vline(xintercept=median(atx_ab$minimum_nights), size =1.5, color = "black") +
+            coord_flip() +
+            theme_minimal() +
+            ggtitle("Night Min") +
+            ylab("") +
+            xlab("") +
+            plot_theme
+
+df = data.frame(price = atx_ab["price"][atx_ab["price"] <= 750])
+c = ggplot(data = df, mapping = aes(y = "", x = price)) +
+            geom_violin(size=1.1, color = "black", fill = "cyan", alpha = .7) +
+            geom_vline(xintercept=median(atx_ab$price), size =1.5, color = "black") +
+            coord_flip() +
+            ggtitle("Price <= 750") +
+            theme_minimal() +
+            ylab("") +
+            xlab("") +
+            plot_theme
+
+df = data.frame(minimum_nights = atx_ab["minimum_nights"][atx_ab["minimum_nights"] <= 32])
+d = ggplot(data = df, mapping = aes(y = "", x = minimum_nights)) +
+  geom_violin(size=1.1, color = "black", fill = "yellow", alpha = .7) +
+           geom_vline(xintercept=median(atx_ab$minimum_nights), size =1.5, color = "black") +
+           coord_flip() +
+           ggtitle("Night Min <= 32") +
+           theme_minimal() +
+           ylab("") +
+           xlab("") +
+           plot_theme
+
+plot_grid(a, c,ncol=2, nrow=1)
+plot_grid(b, d, ncol=2, nrow=1)
+
+```
+
+
+```{r}
+#average price per listing type?
+#how does room type affect the average price?
+room_type_avg = aggregate(list(avg_price = atx_ab$price), list(room_type = atx_ab$room_type), mean)
+room_type_avg$Percent = prop.table(room_type_avg$avg_price) * 100
+room_type_avg
+
+
+plot_theme = theme(
+              plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, face = "bold"),
+              axis.text.y = element_text(size = 19, face = "bold"),
+              axis.title.x = element_text(size = 19),
+              axis.title.y = element_text(size = 19),
+              legend.position = "none")
+        
+options(repr.plot.width=15, repr.plot.height=6)
+options(warn=-1)
+a = ggplot(data = room_type_avg, aes(x=room_type, y=avg_price)) +
+         coord_flip() +
+         geom_segment(aes(xend=room_type, yend=0, color = room_type), size = 2) +
+         geom_point(size=7, mapping = aes(color = room_type)) +
+         theme_minimal() +
+         xlab("") +
+         ylab("") +
+         ggtitle("Average Price per Room Type") +
+         plot_theme
+
+a
+
+# entire home/ apartment accounts for 39.02% of all room types and has an average price of $329.50. the average price is $5.81 more than the average hotel room and 2.6 time higher than the average private room and 5 times higher than the average shared room.
+
+# hotel room  accounts for 38.34% of all room types and has an average price of $323.68. the average price is $5.81 lower than the average entire home/ apartment and 2.6 times higher than the average private room and 4.9 times higher than the average shared room.
+
+# private room  accounts for 14.77% of all room types and has an average price of $124.73. the average price is 2.6 times lower than the average entire home/ apartment and the average hotel room and 1.9 times higher than the average shared room.
+
+# shared room  accounts for 7.86% of all room types and has an average price of $66.35. the average price is 5 times lower than he average entire home/ apartment and 4.9 times lower than the average hotel room and 1.9 lower than the average private room.
+```
+
+
+```{r}
+#how does the average price change for each area?
+plot_theme1 = theme(
+              plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 10, face = "bold"),
+              axis.text.y = element_text(size = 10, face = "bold"),
+              axis.title.x = element_text(size = 14),
+              axis.title.y = element_text(size = 14),
+              )
+
+area_price_avg = aggregate(list(avg_price = atx_ab$price), list(neighbourhood_group = atx_ab$neighbourhood_group), mean)
+area_price_avg$Percent = prop.table(area_price_avg$avg_price) * 100
+area_price_avg = area_price_avg[order(area_price_avg$avg_price),]
+area_price_avg
+
+less_price_area= head(area_price_avg, 10)
+top_price_area = tail(area_price_avg, 10)
+
+
+
+options(repr.plot.width=15, repr.plot.height=6)
+options(warn=-1)
+a = ggplot(data = area_price_avg, aes(x = reorder(neighbourhood_group, -avg_price), y = avg_price)) +
+         coord_flip() +
+         geom_segment(aes(xend=neighbourhood_group, yend=0, color = neighbourhood_group), size = 2) +
+         geom_point(size=7, mapping = aes(color = neighbourhood_group)) +
+         theme_minimal() +
+         xlab("") +
+         ylab("") +
+         ggtitle("Average Price per Area") +
+         plot_theme1
+
+
+#most expensive areas
+#b = ggplot(data = top_price_area, aes(x = reorder(neighbourhood_group, -avg_price), y = avg_price)) +
+#         coord_flip() +
+#         geom_segment(aes(xend=neighbourhood_group, yend=0, color = neighbourhood_group), size = 2) +
+#         geom_point(size=7, mapping = aes(color = neighbourhood_group)) +
+#         theme_minimal() +
+#         xlab("") +
+#         ylab("") +
+#         ggtitle("10 Highest Priced Areas") +
+#         plot_theme
+
+#most affordable areas
+#c = ggplot(data = less_price_area, aes(x = reorder(neighbourhood_group, -avg_price), y = avg_price)) +
+#         coord_flip() +
+#         geom_segment(aes(xend=neighbourhood_group, yend=0, color = neighbourhood_group), size = 2) +
+#         geom_point(size=7, mapping = aes(color = neighbourhood_group)) +
+#         theme_minimal() +
+#         xlab("") +
+#         ylab("") +
+#         ggtitle("10 Lowest Priced Areas") +
+#         plot_theme
+
+
+top_10_neighbourhood = aggregate(list(atx_ab$price), list(atx_ab$neighbourhood_group), mean)
+colnames(top_10_neighbourhood) = c("neighbourhood_group", "Average_price_per_neighbourhood")
+top_10_neighbourhood = top_10_neighbourhood[order(top_10_neighbourhood$Average_price_per_neighbourhood),]
+top_10_neighbourhood = tail(top_10_neighbourhood, 10)
+
+r = c()
+for(i in 10:1){r = c(r, i)}
+row.names(top_10_neighbourhood) = r
+top_10_neighbourhood
+
+plot_theme = theme(plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, angle=15, face = "bold"),
+              axis.text.y = element_text(size = 19, angle=10, face = "bold"),
+              axis.title.x = element_text(size = 19),
+              axis.title.y = element_text(size = 19),
+              legend.position = "none")
+
+options(repr.plot.width=15, repr.plot.height=11)
+b = ggplot(data = top_10_neighbourhood, mapping = aes(x = reorder(neighbourhood_group, -Average_price_per_neighbourhood), y = Average_price_per_neighbourhood)) +
+     geom_bar(stat = "identity", mapping = aes(fill = neighbourhood_group, color = neighbourhood_group), alpha = .8, size = 1.5) +
+     geom_label(mapping = aes(label = round(Average_price_per_neighbourhood, 2)), size = 6, fill = "#F5FFFA", fontface = "bold") +
+     coord_flip() +
+     theme_ipsum() + 
+     ggtitle("Most Expensive Areas on Average") +
+     xlab("") +
+     ylab("") +
+     plot_theme
+
+
+less_10_neighbourhood = aggregate(list(atx_ab$price), list(atx_ab$neighbourhood_group), mean)
+colnames(less_10_neighbourhood) = c("neighbourhood_group", "Average_price_per_neighbourhood")
+less_10_neighbourhood = less_10_neighbourhood[order(less_10_neighbourhood$Average_price_per_neighbourhood),]
+less_10_neighbourhood
+
+less_10_neighbourhood = head(less_10_neighbourhood, 10)
+r = c()
+for(i in 1:10){r = c(r, i)}
+row.names(less_10_neighbourhood) = r
+less_10_neighbourhood
+
+
+options(repr.plot.width=15, repr.plot.height=11)
+c = ggplot(data = less_10_neighbourhood, mapping = aes(x = reorder(neighbourhood_group, -Average_price_per_neighbourhood), y = Average_price_per_neighbourhood)) +
+     geom_bar(stat = "identity", mapping = aes(fill = neighbourhood_group, color = neighbourhood_group), alpha = .8, size = 1.5) +
+     geom_label(mapping = aes(label = round(Average_price_per_neighbourhood, 2)), size = 6, fill = "#F5FFFA", fontface = "bold") +
+     coord_flip() +
+     theme_ipsum() + 
+     ggtitle("Least Expensive Areas on Average") +
+     xlab("") +
+     ylab("") +
+     plot_theme
+
+a
+b
+c
+```
+
+
+```{r}
+#top 10 zipcodes/areas
+
+top_10_zips = aggregate(list(atx_ab$price), list(atx_ab$neighbourhood), mean)
+colnames(top_10_zips) = c("neighbourhood", "Average_price_per_zip")
+top_10_zips = top_10_zips[order(top_10_zips$Average_price_per_zip),]
+top_10_zips = tail(top_10_zips, 10)
+top_10_zips = head(top_10_zips, 10)
+
+
+r = c()
+for(i in 10:1){r = c(r, i)}
+row.names(top_10_zips) = r
+top_10_zips
+
+
+#10 least expensive zipcodes/areas
+
+last_10_zips = aggregate(list(atx_ab$price), list(atx_ab$neighbourhood), mean)
+colnames(last_10_zips) = c("neighbourhood", "Average_price_per_zip")
+last_10_zips = last_10_zips[order(last_10_zips$Average_price_per_zip),]
+
+last_10_zips = head(last_10_zips, 10)
+
+r = c()
+for(i in 10:1){r = c(r, i)}
+row.names(last_10_zips) = r
+last_10_zips
+```
+
+```{r}
+plot_theme = theme(plot.background = element_rect(fill = "white"),
+              plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, face = "bold"),
+              axis.text.y = element_text(size = 19, face = "bold"),
+              axis.title.x = element_text(size = 21),
+              axis.title.y = element_text(size = 21),
+              legend.position = "none")
+
+na = c("South Atx", "Central East Atx", "Central Atx", "Southeast Atx", "Downtown", "Lake Travis", "North Atx", "Dripping Springs #TX", "Leander TX", "Wimberley TX")
+
+
+df = data.frame(neighbourhood_group = atx_ab$neighbourhood_group[atx_ab$neighbourhood_group == na], price = atx_ab$price[atx_ab$neighbourhood_group == na])
+
+
+ggplot(data = df, mapping = aes(x = price, y = neighbourhood_group)) +
+    geom_density_ridges(mapping = aes(fill = neighbourhood_group), bandwidth = 130, alpha = .6, size = 1.5) +
+    theme_economist() +
+    xlab("Price") +
+    ylab("") +
+    ggtitle("Price Distribution by Location") +
+    plot_theme
+
+```
+
+
+```{r}
+plot_theme = theme(
+              plot.title = element_text(size = 13, hjust = .5),
+              axis.text.x = element_text(size = 9, face = "bold"),
+              axis.text.y = element_text(size = 9, face = "bold"),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              legend.position = "none",
+              strip.text.x = element_text(margin = margin(.5, .5, .5, .5), size = 9))
+
+
+
+ggplot(data = df, mapping = aes(x = price)) +
+         geom_histogram(mapping = aes(fill = neighbourhood_group), bins = 70, size = 1, color = "black") +
+         ylab("Frequency") +
+         xlab("Price") +
+         ggtitle("Price Histogram") +
+         facet_wrap(~neighbourhood_group, nrow=4) +
+         theme_ipsum() +
+         plot_theme
+
+```
+
+
+```{r}
+plot_theme = theme(plot.title = element_text(size = 23, hjust = .5),
+              axis.text.x = element_text(size = 19, face = "bold"),
+              axis.text.y = element_text(size = 19, face = "bold"),
+              axis.title.x = element_text(size = 19),
+              axis.title.y = element_text(size = 19),
+              legend.text = element_text(colour="black", size=19, face="bold"),
+              legend.background = element_rect(fill="#F5FFFA", size=0.5, linetype="dashed", 
+                                  colour ="black"))
+
+ggplot(data = atx_ab, mapping = aes(x = latitude, y = longitude)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = price), size = 3) +
+    ggtitle("") +
+    plot_theme
+```
+
+
+```{r}
+df = data.frame(price = atx_ab["price"][atx_ab["price"] <= 100], room_type = atx_ab["room_type"][atx_ab["price"] <= 100], lat = atx_ab["latitude"][atx_ab["price"] <= 100], lon = atx_ab["longitude"][atx_ab["price"] <= 100],
+                 neighbourhood_group = atx_ab["neighbourhood_group"][atx_ab["price"] <= 100], minimum_nights = atx_ab["minimum_nights"][atx_ab["price"] <= 100])
+df$minimum_nights = factor(df$minimum_nights)
+ggplot(data = df, mapping = aes(x = lat, y = lon, color = price)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = price), size = 3) +
+    ggtitle("Price <= 100 dollars ") +
+    plot_theme
+```
+
+
+```{r}
+options(repr.plot.width=17, repr.plot.height=14)
+a=ggplot(data = df, mapping = aes(x = lat, y = lon)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = neighbourhood_group), size = 3) +
+    ggtitle("Price <= 100 dollars") +
+    xlab("Latitude") +
+    ylab("Longitude") +
+    plot_theme
+
+b=ggplot(data = df, mapping = aes(x = lat, y = lon)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = price), size = 3) +
+    ggtitle("Price <= 100 dollars ") +
+    xlab("Latitude") +
+    ylab("Longitude") +
+    plot_theme
+
+a
+b
+
+```
+
+```{r}
+options(repr.plot.width=22, repr.plot.height=14)
+a=ggplot(data = df, mapping = aes(x = lat, y = lon)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = neighbourhood_group), size = 3) +
+    ggtitle("Price <= 100 dollars") +
+    xlab("Latitude") +
+    ylab("Longitude") +
+    plot_theme
+
+b=ggplot(data = df, mapping = aes(x = lat, y = lon)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = price), size = 3) +
+    ggtitle("Price <= 100 dollars ") +
+    xlab("Latitude") +
+    ylab("Longitude") +
+    plot_theme
+
+c=ggplot(data = df, mapping = aes(x = lat, y = lon)) +
+    theme_minimal() +
+    scale_fill_identity() +
+    geom_point(mapping = aes(color = room_type), size = 3) +
+    ggtitle("Price <= 100 dollars ") +
+    xlab("Latitude") +
+    ylab("Longitude") +
+    plot_theme
+
+a
+b
+c
+```
+
+```{r}
+
+```
+
